@@ -25,6 +25,9 @@ struct clause
 
 vector<clause> clauses;
 
+//-----------------------------------------------------------------------------
+// bits
+//-----------------------------------------------------------------------------
 int allocate_bit()
 {
     int ret = id_counter;
@@ -34,25 +37,22 @@ int allocate_bit()
 int make_literal_zero()
 {
     int ret = allocate_bit();
-
     clauses.push_back(vector<int> { -ret });
-
     return ret;
 }
 int make_literal_one()
 {
     int ret = allocate_bit();
-
     clauses.push_back(vector<int> { ret });
-
     return ret;
 }
+// output = (a1 == a2)
 int make_equals(int a1, int a2)
 {
     int ret = allocate_bit();
 
-    clauses.push_back(vector<int> { ret, a1, -a2 });
-    clauses.push_back(vector<int> { ret, -a1, a2 });
+    clauses.push_back(vector<int> { -ret, a1, -a2 });
+    clauses.push_back(vector<int> { -ret, -a1, a2 });
     clauses.push_back(vector<int> { ret, -a1, -a2 });
     clauses.push_back(vector<int> { ret, a1, a2 });
 
@@ -73,16 +73,26 @@ int make_and(int a1, int a2)
 {
     int ret = allocate_bit();
 
-    clauses.push_back(vector<int> { ret, -a1, -a2});
+    clauses.push_back(vector<int> { ret, -a1, -a2 });
     clauses.push_back(vector<int> { -ret, a1 });
     clauses.push_back(vector<int> { -ret, a2 });
 
     return ret;
 }
+int make_or(int a1, int a2)
+{
+    int ret = allocate_bit();
 
-//-----------------
+    clauses.push_back(vector<int> { -ret, a1, a2 });
+    clauses.push_back(vector<int> { ret, -a1 });
+    clauses.push_back(vector<int> { ret, -a2 });
+
+    return ret;
+}
+
+//-----------------------------------------------------------------------------
 // bytes
-//-----------------
+//-----------------------------------------------------------------------------
 struct byte
 {
     int b[8];
@@ -113,11 +123,16 @@ byte make_literal_byte(int a)
 }
 int make_equals(byte a1, byte a2)
 {
-    int ret = make_literal_one();
-
+    byte mask = allocate_byte();
     for (int i = 0; i < 8; ++i)
     {
-        ret = make_and(ret, make_equals(a1.b[i], a2.b[i]));
+        mask.b[i] = make_equals(a1.b[i], a2.b[i]);
+    }
+
+    int ret = make_literal_one();
+    for (int i = 0; i < 8; ++i)
+    {
+        ret = make_and(ret, mask.b[i]);
     }
 
     return ret;
@@ -129,8 +144,9 @@ byte make_addition(byte a1, byte a2)
     int carry = make_literal_zero();
     for (int i = 0; i < 8; ++i)
     {
+        // full adder implementation
         ret.b[i] = make_xor(carry, make_xor(a1.b[i], a2.b[i]));
-        carry = make_and(carry, make_and(a1.b[i], a2.b[i]));
+        carry = make_or(make_and(carry, make_xor(a1.b[i], a2.b[i])), make_and(a1.b[i], a2.b[i]));
     }
 
     return ret;
@@ -158,33 +174,21 @@ bool is_sat(vector<int> vars)
 
 int main()
 {
-    /*id_counter = 3;
-    int out = make_xor(1, 2);
-    clauses.push_back(vector<int> { out });
+    // example
+    // after plugging into SAGE, this gives that ans = 5
 
-    for (int i = 0; i < clauses.size(); ++i)
-    {
-        for (int& c : clauses[i].dis)
-        {
-            printf("%d ", c);
-        }
-        printf("\n");
-    }
-
-    int e[] = { -1, 1, 1 };
-    printf("%d\n", is_sat(vector<int>(e, e + 3)));*/
-
+    // usage: a.exe > a.txt
+    // in sage:
+    //   solver = SAT()
+    //   solver.read("/path/to/a.txt")
+    //   solver()
+    
     byte ans = allocate_byte();
     byte b1 = make_literal_byte(15);
     byte b2 = make_literal_byte(20);
     byte b3 = make_addition(ans, b1);
     int a = make_equals(b2, b3);
     clauses.push_back(vector<int> { a });
-
-    /*byte b1 = make_literal_byte(15);
-    //byte b2 = make_literal_byte(15);
-    byte b2 = allocate_byte();
-    int a = make_equals(b1, b2);*/
     
     printf("p cnf %d %d\n", id_counter - 1, clauses.size());
     for (int i = 0; i < clauses.size(); ++i)
