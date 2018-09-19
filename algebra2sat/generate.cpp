@@ -1,9 +1,11 @@
-#include <iostream>
+#include <fstream>
 #include <stdio.h>
 #include <string>
 #include <vector>
 
-using namespace std;
+using std::vector;
+using std::ofstream;
+using std::string;
 
 static int id_counter = 1;
 
@@ -12,11 +14,6 @@ struct clause
     vector<int> dis;
 
     clause() {}
-
-    clause(int* arr, int len)
-        : dis(arr, arr + len)
-    {
-    }
 
     clause(vector<int> a)
         : dis(a)
@@ -150,7 +147,7 @@ byte make_literal_byte(int a)
 }
 int make_equals(byte a1, byte a2)
 {
-    byte mask = allocate_byte();
+    byte mask;
     for (int i = 0; i < 8; ++i)
     {
         mask.b[i] = make_equals(a1.b[i], a2.b[i]);
@@ -240,6 +237,25 @@ byte make_multiplication(byte a1, byte a2)
     return ret;
 }
 
+//-----------------------------------------------------------------------------
+// watches
+//-----------------------------------------------------------------------------
+struct watch
+{
+    string name;
+    vector<int> bits;
+};
+vector<watch> watches;
+
+void add_watch(string name, byte b)
+{
+    watch w;
+    w.name = name;
+    for (int i = 0; i < 8; ++i)
+        w.bits.push_back(b.b[i]);
+    watches.push_back(w);
+}
+
 bool is_sat(vector<int> vars)
 {
     bool ret = true;
@@ -287,19 +303,37 @@ int main()
     byte determinant = make_addition(make_multiplication(x1, y2), make_2s_compliment(make_multiplication(x2, y1)));
     force_equals(ans, determinant);
 
+    add_watch("answer", ans);
+    add_watch("determinant", determinant);
+
     /*byte ans = allocate_byte();
     byte x = make_literal_byte(5);
     byte a = make_2s_compliment(x);
     force_equals(ans, a);*/
     
-    printf("p cnf %d %d\n", id_counter - 1, clauses.size());
+    //printf("p cnf %d %d\n", id_counter - 1, clauses.size());
+    ofstream dimacs("dimacs.txt");
+    dimacs << "p cnf " << id_counter - 1 << " " << clauses.size() << "\n";
     for (int i = 0; i < clauses.size(); ++i)
     {
         for (int& c : clauses[i].dis)
         {
             //int c = clauses[i].dis[j];
-            printf("%d ", c);
+            //printf("%d ", c);
+            dimacs << c << " ";
         }
-        printf("0\n");
+        //printf("0\n");
+        dimacs << "0\n";
+    }
+
+    ofstream watches_file("watches.txt");
+    for (watch& w : watches)
+    {
+        watches_file << w.bits.size() << " ";
+        for (int& b : w.bits)
+        {
+            watches_file << b << " ";
+        }
+        watches_file << w.name << "\n";
     }
 }
