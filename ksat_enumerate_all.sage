@@ -30,9 +30,29 @@ def add_grassman_clauses(solver, a, b, c, d, e, f):
     for el in all_relations:
         if not {-1, 1}.issubset({ el[0]*el[1], -el[2]*el[3], el[4]*el[5] }):
             solver.add_clause((-el[0] * a, -el[1] * b, -el[2] * c, -el[3] * d, -el[4] * e, -el[5] * f))
+
+# not correct, but getting closer
 def add_acyclic_clause(solver):
-    solver.add_clause(tuple(range(1, len(subset_index_cache) + 1)))
-    solver.add_clause(tuple(range(-1, -len(subset_index_cache) - 1, -1)))
+    # currently 2d only
+    tau = Subsets(n, 4)
+    for sigma_set in tau:
+        sigma = sorted(list(sigma_set))
+
+        l123 = get_index([ sigma[0], sigma[1], sigma[2] ])
+        l234 = get_index([ sigma[1], sigma[2], sigma[3] ])
+        l134 = get_index([ sigma[0], sigma[2], sigma[3] ])
+        l124 = get_index([ sigma[0], sigma[1], sigma[3] ])
+
+        solver.add_clause((l123, l234))
+        solver.add_clause((-l123, -l234))
+
+        solver.add_clause((l123, -l134))
+        solver.add_clause((-l123, l134))
+
+        solver.add_clause((l123, l124))
+        solver.add_clause((-l123, -l124))
+
+# incorrect, ignore
 def add_nonrealizable_2d_clause(solver):
     subset_pairs = Subsets(set(subset_index_cache), 2)
     for pair_set in subset_pairs:
@@ -74,10 +94,8 @@ for sigma_set in tau:
         add_grassman_clauses(solver, chi_12, chi_34, chi_13, chi_24, chi_14, chi_23)
 
 add_acyclic_clause(solver)
-add_nonrealizable_2d_clause(solver)
-#solver.add_clause((-1,))
-#solver.add_clause((1,))
-#solver.add_clause((3,))
+#add_nonrealizable_2d_clause(solver)
 
-print(subset_index_cache)
-print(solver())
+#print(subset_index_cache)
+solutions = solver()
+print(solutions)
