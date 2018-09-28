@@ -81,3 +81,4 @@ add_nonrealizable_2d_clause(solver)
 
 print(subset_index_cache)
 print(solver())
+print("hi")
