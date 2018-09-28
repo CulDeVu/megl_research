@@ -100,6 +100,7 @@ add_acyclic_clause(solver)
 print(subset_index_cache)
 print(solver())
 print("hi")
+print()
 =======
 #print(subset_index_cache)
 solutions = solver()
