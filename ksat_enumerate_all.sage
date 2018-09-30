@@ -3,15 +3,28 @@ n = 5
 r = 3
 d = r - 2
 
-# assumes sorted *lists* l1 and l2
-def get_inversions_sign(l1, l2):
+def get_inversions_to_sorted(l):
     ret = 1
+    finished = False
+    l_temp = l[:]
 
-    for el in l2:
-        num = len({x for x in l1 if el < x})
-        ret *= -1 if (num % 2 == 1) else 1
+    # bubblesort, keeping track of inversions
+    while not finished:
+        finished = True
+
+        for i in range(len(l_temp) - 1):
+            if l_temp[i] > l_temp[i + 1]:
+                l_temp[i], l_temp[i + 1] = l_temp[i + 1], l_temp[i]
+                ret *= -1
+                finished = False
     
     return ret
+
+# assumes sorted *lists* l1 and l2
+def get_inversions_sign(l1, l2):
+    l_temp = l1[:]
+    l_temp.extend(l2)
+    return get_inversions_to_sorted(l_temp)
 
 # takes in lists (not necessarily sorted) and outputs a unique index
 # For large values of n, probably bad.
@@ -31,41 +44,49 @@ def add_grassman_clauses(solver, a, b, c, d, e, f):
         if not {-1, 1}.issubset({ el[0]*el[1], -el[2]*el[3], el[4]*el[5] }):
             solver.add_clause((-el[0] * a, -el[1] * b, -el[2] * c, -el[3] * d, -el[4] * e, -el[5] * f))
 
-# not correct, but getting closer
-def add_acyclic_clause(solver):
-    # currently 2d only
-    tau = Subsets(n, 4)
-    for sigma_set in tau:
-        sigma = sorted(list(sigma_set))
+# This excludes the circuit given from appearing in the solution.
+# Note that excluding a circuit will also exclude its negative
+def exclude_circuit(solver, circuit):
+    if len(circuit) != n:
+        print("ERROR: not right dimensions")
+    
+    non_zero_indices = [i for i,e in enumerate(circuit) if circuit[i] != 0]
+    if len(non_zero_indices) != r + 1:
+        print("ERROR: circuit support is the wrong size")
+    
+    # temporary, for ease of implementation
+    if r != 3:
+        print("ERROR: wrong dimension")
 
-        l123 = get_index([ sigma[0], sigma[1], sigma[2] ])
-        l234 = get_index([ sigma[1], sigma[2], sigma[3] ])
-        l134 = get_index([ sigma[0], sigma[2], sigma[3] ])
-        l124 = get_index([ sigma[0], sigma[1], sigma[3] ])
+    # the 4 chirotopes that this circuit affects
+    triples = []
+    triples.append([non_zero_indices[3] + 1, non_zero_indices[1] + 1, non_zero_indices[2] + 1])
+    triples.append([non_zero_indices[0] + 1, non_zero_indices[3] + 1, non_zero_indices[2] + 1])
+    triples.append([non_zero_indices[0] + 1, non_zero_indices[1] + 1, non_zero_indices[3] + 1])
+    triples.append([non_zero_indices[0] + 1, non_zero_indices[1] + 1, non_zero_indices[2] + 1])
 
-        solver.add_clause((l123, l234))
-        solver.add_clause((-l123, -l234))
+    # chirotope indices cooresponding to the triples
+    chi = [get_index(triple) * get_inversions_to_sorted(triple) for triple in triples]
 
-        solver.add_clause((l123, -l134))
-        solver.add_clause((-l123, l134))
+    # construct the solution in terms of chirotopes
+    # with chi[3] = +1
+    solution = []
+    for i in range(3):
+        solution.append(1 if circuit[non_zero_indices[i]] != circuit[non_zero_indices[3]] else -1)
+    solution.append(1)
+    
+    # now remove its two negations
+    solver.add_clause(( solution[0] * chi[0], solution[1] * chi[1], solution[2] * chi[2], solution[3] * chi[3] ))
+    solver.add_clause(( -solution[0] * chi[0], -solution[1] * chi[1], -solution[2] * chi[2], -solution[3] * chi[3] ))
 
-        solver.add_clause((l123, l124))
-        solver.add_clause((-l123, -l124))
+def exclude_all_circuit_permutations(solver, num_positive, num_negative):
+    all_circuits = Tuples([0, -1, 1], n)
 
-# incorrect, ignore
-def add_nonrealizable_2d_clause(solver):
-    subset_pairs = Subsets(set(subset_index_cache), 2)
-    for pair_set in subset_pairs:
-        pair = list(pair_set)
-        pair_list = [list(pair[0]), list(pair[1])]
-        if (pair_list[0][0] == pair_list[1][0]) and (pair_list[0][1] == pair_list[1][1]):
-            max_el = max(pair_list[0][2], pair_list[1][2])
-            min_el = min(pair_list[0][2], pair_list[1][2])
-            ind1 = get_index(pair_list[0])
-            ind2 = get_index(pair_list[1])
-            ind3 = get_index([pair_list[0][0], min_el, max_el])
-            solver.add_clause((ind1, ind2, ind3))
-            solver.add_clause((-ind1, -ind2, -ind3))
+    for circuit in all_circuits:
+        positive = sum(1 if x == 1 else 0 for x in circuit)
+        negative = sum(1 if x == -1 else 0 for x in circuit)
+        if num_positive == positive and num_negative == negative:
+            exclude_circuit(solver, circuit)
 
 E = set(range(1, n+1))
 tau = Subsets(n, d)
@@ -93,16 +114,46 @@ for sigma_set in tau:
 
         add_grassman_clauses(solver, chi_12, chi_34, chi_13, chi_24, chi_14, chi_23)
 
-add_acyclic_clause(solver)
-#add_nonrealizable_2d_clause(solver)
+# acyclic
+#exclude_all_circuit_permutations(solver, 4, 0)
 
-<<<<<<< HEAD
+# no quadrilaterals 
+exclude_all_circuit_permutations(solver, 2, 2)
+
 print(subset_index_cache)
-print(solver())
-print("hi")
-print()
-=======
-#print(subset_index_cache)
 solutions = solver()
 print(solutions)
->>>>>>> master
+
+# drawing routine. Brute force
+# only works for r = 3 (2-dimensions) because sage only plots in 2d (i think)
+from random import random
+for i in range(1000):
+
+    # generate n random 2-dimensional points
+    v = [(random(), random()) for j in range(n)]
+
+    # check if this is a realization
+    found = True
+    for i, subset_set in enumerate(subset_index_cache):
+        subset = sorted(list(subset_set))
+
+        v0 = v[subset[0] - 1]
+        v1 = v[subset[1] - 1]
+        v2 = v[subset[2] - 1]
+
+        output = (v1[0] - v0[0]) * (v2[1] - v0[1]) - (v1[1] - v0[1]) * (v2[0] - v0[0])
+        if solutions[i + 1] == True and output <= 0.0:
+            found = False
+            break
+        if solutions[i + 1] == False and output >= 0.0:
+            found = False
+            break
+    
+    if not found:
+        continue
+
+    G = points(v)
+    for i,p in enumerate(v):
+        G += text('  %d'%(i + 1), p, horizontal_alignment='left', color='red')
+    G.show()
+    break
